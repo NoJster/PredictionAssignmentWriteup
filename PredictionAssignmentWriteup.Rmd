@@ -1,0 +1,75 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Nils o. Janus"
+date: "December 9, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(h2o)
+training <- read.csv("~/Desktop/tmp/pml-training.csv")
+testing <- read.csv("~/Desktop/tmp/pml-testing.csv")
+h2o.init()
+```
+
+# Data Preprocessing
+Glancing at the raw data of the testing dataset, it readily becomes apparent that the testing data set contains a large number of columns with all NA values, which will not be used during the prediction.
+Identifying and cleansing those columns in both the testing and traing data set is achieved as follows
+
+```{r col_cleanse}
+my_training <- training[, colSums(!is.na(testing)) != 0]
+my_testing <- testing[, colSums(!is.na(testing)) != 0]
+```
+
+Looking at the remaining subset of training data, there are still several rows with all NA values, which we'll remove
+```{r row_cleanse}
+my_training <- my_training[rowSums(is.na(my_training)) == 0, ]
+```
+
+Finally, we identify columns we consider not to have predictive value and remove them as follows
+```{r final_cleanse}
+no_predictive_value = c('cvtd_timestamp', 'raw_timestamp_part_1', 'raw_timestamp_part_2', 'new_window', 'num_window', 'user_name')
+my_training <- my_training[, !(names(my_training) %in% no_predictive_value)]
+my_testing <- my_testing[, !(names(my_testing) %in% no_predictive_value)]
+```
+
+# Model building
+Since we are building a multiclass classifier, we build three different models, in order of increasing complexity:
+
+1. Generalized Linear Model
+2. Random Forest
+3. Gradient Boosting Machines
+
+for the model building part, we use the h2o library because of it's inbuilt support for multicore utilization.
+
+K-fold cross validation (with K = 5) has been used for all models (this is the nfolds = 5 parameter in the h2o models)
+
+```{r models, , results = FALSE}
+h2o_train <- as.h2o(my_training)
+GLM <- h2o.glm(x = colnames(my_training)[1:53], y = "classe", training_frame = h2o_train, family = "multinomial", nfolds = 5)
+DRF <- h2o.randomForest(x = colnames(my_training)[1:53], y = "classe", training_frame = h2o_train, ntrees = 50, nfolds = 5)
+GBM <- h2o.gbm(x = colnames(my_training)[1:53], y = "classe", training_frame = h2o_train, nfolds = 5)
+```
+
+# Model performance
+Looking at the confusion matrices, we see that the performance of GLM is worst and that DRF and GBM score (almost) perfectly:
+```{r confusionMatrices}
+h2o.confusionMatrix(GLM)
+h2o.confusionMatrix(DRF)
+h2o.confusionMatrix(GBM)
+```
+
+# Prediction
+All models agree in that they predict classe A for all of the twenty examples in the test set:
+```{r prediction}
+h2o_test <- as.h2o(my_testing)
+print(h2o.predict(GLM, newdata = h2o_test), n = -1)
+print(h2o.predict(DRF, newdata = h2o_test), n = -1)
+print(h2o.predict(GBM, newdata = h2o_test), n = -1)
+```
+
+# Interpretation of results and explanation of choice
+Seeing how all models agree on their final predictions on the testing set, either all of them hopelessly overfit or all of them are actually predicting the correct results with no or very little out of sample error. A short run with K-fold cross validation (K = 200) shows similar results, indicating that even a very small subset of data is sufficient to correctly predict results with a very low out of sample error.
+
+The reason for choosing GLM, DRF and GBM is that they present increasingly more complexity (and thus lower interpretability) yet this added complexity allows for more accurate predictions. I consider it good style to start with computationally easy models first to obtain a baseline and gradually making them more expensive (= computationally hard). This approach has proven useful in this particular exercise as well.
