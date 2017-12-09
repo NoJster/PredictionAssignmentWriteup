@@ -125,15 +125,13 @@ $(document).ready(function () {
 
 <div id="data-preprocessing" class="section level1">
 <h1>Data Preprocessing</h1>
-<p>Glancing at the raw data of the testing dataset, it readily becomes apparent that the testing data set contains a large number of columns with all NA values, which will not be used during the prediction. Identifying and cleansing those columns in both the testing and traing data set is achieved as follows</p>
-<pre class="r"><code>my_training &lt;- training[, colSums(!is.na(testing)) != 0]
-my_testing &lt;- testing[, colSums(!is.na(testing)) != 0]</code></pre>
-<p>Looking at the remaining subset of training data, there are still several rows with all NA values, which we’ll remove</p>
-<pre class="r"><code>my_training &lt;- my_training[rowSums(is.na(my_training)) == 0, ]</code></pre>
-<p>Finally, we identify columns we consider not to have predictive value and remove them as follows</p>
-<pre class="r"><code>no_predictive_value = c('cvtd_timestamp', 'raw_timestamp_part_1', 'raw_timestamp_part_2', 'new_window', 'num_window', 'user_name')
-my_training &lt;- my_training[, !(names(my_training) %in% no_predictive_value)]
-my_testing &lt;- my_testing[, !(names(my_testing) %in% no_predictive_value)]</code></pre>
+<p>Glancing at the raw data of the testing dataset, it readily becomes apparent that the testing data set contains a large number of columns with many NA values, which will not be used during the prediction. Identifying and cleansing those columns in both the testing and traing data set is achieved as follows</p>
+<pre class="r"><code>mostNA &lt;- sapply(training, function(x) mean(is.na(x))) &gt; 0.90
+my_training &lt;- training[, mostNA == FALSE]
+my_testing &lt;- testing[, mostNA == FALSE]</code></pre>
+<p>Since row 1 is just an ID, we can eliminate it as well</p>
+<pre class="r"><code>my_training &lt;- my_training[,-1]
+my_testing &lt;- my_testing[,-1]</code></pre>
 </div>
 <div id="model-building" class="section level1">
 <h1>Model building</h1>
@@ -146,134 +144,135 @@ my_testing &lt;- my_testing[, !(names(my_testing) %in% no_predictive_value)]</co
 <p>for the model building part, we use the h2o library because of it’s inbuilt support for multicore utilization.</p>
 <p>K-fold cross validation (with K = 5) has been used for all models (this is the nfolds = 5 parameter in the h2o models)</p>
 <pre class="r"><code>h2o_train &lt;- as.h2o(my_training)
-GLM &lt;- h2o.glm(x = colnames(my_training)[1:53], y = &quot;classe&quot;, training_frame = h2o_train, family = &quot;multinomial&quot;, nfolds = 5)
-DRF &lt;- h2o.randomForest(x = colnames(my_training)[1:53], y = &quot;classe&quot;, training_frame = h2o_train, ntrees = 50, nfolds = 5)
-GBM &lt;- h2o.gbm(x = colnames(my_training)[1:53], y = &quot;classe&quot;, training_frame = h2o_train, nfolds = 5)</code></pre>
+h2o_test &lt;- as.h2o(my_testing)
+GLM &lt;- h2o.glm(x = colnames(my_training)[1:57], y = &quot;classe&quot;, training_frame = h2o_train, family = &quot;multinomial&quot;, nfolds = 5)
+DRF &lt;- h2o.randomForest(x = colnames(my_training)[1:57], y = &quot;classe&quot;, training_frame = h2o_train, ntrees = 100, nfolds = 5)
+GBM &lt;- h2o.gbm(x = colnames(my_training)[1:57], y = &quot;classe&quot;, training_frame = h2o_train, nfolds = 5)</code></pre>
 </div>
 <div id="model-performance" class="section level1">
 <h1>Model performance</h1>
 <p>Looking at the confusion matrices, we see that the performance of GLM is worst and that DRF and GBM score (almost) perfectly:</p>
 <pre class="r"><code>h2o.confusionMatrix(GLM)</code></pre>
 <pre><code>## Confusion Matrix: Row labels: Actual class; Column labels: Predicted class
-##           A    B    C    D    E  Error           Rate
-## A      5505   75    0    0    0 0.0134 =   75 / 5,580
-## B        25 3674   98    0    0 0.0324 =  123 / 3,797
-## C         0   52 3319   51    0 0.0301 =  103 / 3,422
-## D         0    0   53 3135   28 0.0252 =   81 / 3,216
-## E         0    0    0   23 3584 0.0064 =   23 / 3,607
-## Totals 5530 3801 3470 3209 3612 0.0206 = 405 / 19,622</code></pre>
+##           A    B    C    D    E  Error             Rate
+## A      4157  540  270  477  136 0.2550 =  1,423 / 5,580
+## B      1197 1551  426  400  223 0.5915 =  2,246 / 3,797
+## C      1305  309 1162  463  183 0.6604 =  2,260 / 3,422
+## D       688  568  154 1449  357 0.5494 =  1,767 / 3,216
+## E       748  559  371  428 1501 0.5839 =  2,106 / 3,607
+## Totals 8095 3527 2383 3217 2400 0.4995 = 9,802 / 19,622</code></pre>
 <pre class="r"><code>h2o.confusionMatrix(DRF)</code></pre>
 <pre><code>## Confusion Matrix: Row labels: Actual class; Column labels: Predicted class
-##           A    B    C    D    E  Error         Rate
-## A      5580    0    0    0    0 0.0000 =  0 / 5,580
-## B         0 3797    0    0    0 0.0000 =  0 / 3,797
-## C         0    1 3421    0    0 0.0003 =  1 / 3,422
-## D         0    0    0 3216    0 0.0000 =  0 / 3,216
-## E         0    0    0    0 3607 0.0000 =  0 / 3,607
-## Totals 5580 3798 3421 3216 3607 0.0001 = 1 / 19,622</code></pre>
+##           A    B    C    D    E  Error          Rate
+## A      5577    3    0    0    0 0.0005 =   3 / 5,580
+## B        10 3786    1    0    0 0.0029 =  11 / 3,797
+## C         0   24 3385   13    0 0.0108 =  37 / 3,422
+## D         0    0   20 3191    5 0.0078 =  25 / 3,216
+## E         0    0    0    5 3602 0.0014 =   5 / 3,607
+## Totals 5587 3813 3406 3209 3607 0.0041 = 81 / 19,622</code></pre>
 <pre class="r"><code>h2o.confusionMatrix(GBM)</code></pre>
 <pre><code>## Confusion Matrix: Row labels: Actual class; Column labels: Predicted class
-##           A    B    C    D    E  Error         Rate
-## A      5580    0    0    0    0 0.0000 =  0 / 5,580
-## B         0 3797    0    0    0 0.0000 =  0 / 3,797
-## C         0    0 3422    0    0 0.0000 =  0 / 3,422
-## D         0    0    0 3216    0 0.0000 =  0 / 3,216
-## E         0    0    0    0 3607 0.0000 =  0 / 3,607
-## Totals 5580 3797 3422 3216 3607 0.0000 = 0 / 19,622</code></pre>
+##           A    B    C    D    E  Error          Rate
+## A      5580    0    0    0    0 0.0000 =   0 / 5,580
+## B         1 3794    0    2    0 0.0008 =   3 / 3,797
+## C         0    7 3403   12    0 0.0056 =  19 / 3,422
+## D         0    0   12 3201    3 0.0047 =  15 / 3,216
+## E         0    0    0    6 3601 0.0017 =   6 / 3,607
+## Totals 5581 3801 3415 3221 3604 0.0022 = 43 / 19,622</code></pre>
 </div>
 <div id="prediction" class="section level1">
 <h1>Prediction</h1>
-<p>All models agree in that they predict classe A for all of the twenty examples in the test set:</p>
-<pre class="r"><code>h2o_test &lt;- as.h2o(my_testing)</code></pre>
+<p>All models agree in their predictions for all of the twenty examples in the test set:</p>
+<pre class="r"><code>pred_glm &lt;- h2o.predict(GLM, newdata = h2o_test)</code></pre>
 <pre><code>## 
   |                                                                       
   |                                                                 |   0%
   |                                                                       
   |=================================================================| 100%</code></pre>
-<pre class="r"><code>print(h2o.predict(GLM, newdata = h2o_test), n = -1)</code></pre>
+<pre class="r"><code>pred_drf &lt;- h2o.predict(DRF, newdata = h2o_test)</code></pre>
 <pre><code>## 
   |                                                                       
   |                                                                 |   0%
   |                                                                       
-  |=================================================================| 100%
-##    predict         A            B            C            D            E
-## 1        A 0.9947684 0.0052287744 2.871851e-06 5.719199e-12 2.055430e-20
-## 2        A 0.9992400 0.0007600246 1.946060e-08 2.097425e-14 1.392450e-22
-## 3        A 0.9971555 0.0028443849 7.634091e-08 3.185068e-14 1.942188e-22
-## 4        A 0.9998410 0.0001588864 1.287095e-07 2.343827e-13 1.263715e-22
-## 5        A 0.9993478 0.0006513544 8.420246e-07 1.008835e-13 6.743024e-23
-## 6        A 0.9995761 0.0004236206 2.510733e-07 4.511766e-13 9.423430e-22
-## 7        A 0.9997440 0.0002556560 3.386940e-07 8.443481e-12 3.198466e-21
-## 8        A 0.9984169 0.0015830486 8.300323e-08 2.593310e-12 3.189333e-21
-## 9        A 0.9997515 0.0002485207 3.784440e-09 7.158147e-15 1.788817e-22
-## 10       A 0.9997369 0.0002630704 3.291706e-08 1.799691e-14 2.661586e-22
-## 11       A 0.9991716 0.0008283471 9.180684e-08 7.731788e-13 9.255833e-22
-## 12       A 0.9998658 0.0001340054 2.006378e-07 8.090571e-14 1.584858e-22
-## 13       A 0.9829885 0.0170108554 6.682378e-07 3.831431e-12 1.607630e-20
-## 14       A 0.9998209 0.0001789961 6.192763e-08 5.848800e-15 9.650209e-23
-## 15       A 0.9995750 0.0004247170 2.777228e-07 8.172991e-13 3.686588e-21
-## 16       A 0.9978880 0.0021117491 2.510890e-07 6.747302e-13 1.755755e-21
-## 17       A 0.9994530 0.0005456775 1.334028e-06 1.422744e-13 4.154325e-21
-## 18       A 0.9883665 0.0116334494 5.862207e-08 2.018822e-11 1.378250e-20
-## 19       A 0.9939458 0.0060538745 2.861675e-07 4.860437e-12 1.576385e-20
-## 
-## [20 rows x 6 columns]</code></pre>
-<pre class="r"><code>print(h2o.predict(DRF, newdata = h2o_test), n = -1)</code></pre>
+  |=================================================================| 100%</code></pre>
+<pre class="r"><code>pred_gbm &lt;- h2o.predict(GBM, newdata = h2o_test)</code></pre>
 <pre><code>## 
   |                                                                       
   |                                                                 |   0%
   |                                                                       
-  |=================================================================| 100%
-##    predict         A            B            C            D            E
-## 1        A 0.5554508 4.128022e-01 3.174005e-02 2.479497e-06 4.518156e-06
-## 2        A 0.9533942 2.669897e-02 1.986238e-02 3.103254e-06 4.137996e-05
-## 3        A 0.7169437 2.264033e-01 3.774379e-02 2.947729e-06 1.890625e-02
-## 4        A 0.9999542 3.696688e-05 0.000000e+00 3.124613e-06 5.693690e-06
-## 5        A 0.9570352 2.347310e-02 1.914070e-02 2.990501e-06 3.480128e-04
-## 6        A 0.5819483 1.942232e-01 2.984350e-02 1.492408e-02 1.790610e-01
-## 7        A 0.6950678 1.109049e-01 1.247558e-01 6.926653e-02 5.073950e-06
-## 8        A 0.5538424 3.999973e-01 3.076902e-02 1.538691e-02 4.379932e-06
-## 9        A 0.9995155 4.651624e-04 1.049911e-05 3.123242e-06 5.691192e-06
-## 10       A 0.9975238 2.399699e-03 0.000000e+00 3.117018e-06 7.334734e-05
-## 11       A 0.7050389 2.938774e-01 0.000000e+00 2.898782e-06 1.080743e-03
-## 12       A 0.6404385 1.101579e-01 2.493687e-01 2.440505e-06 3.254261e-05
-## 13       A 0.5753390 4.246550e-01 0.000000e+00 2.140231e-06 3.899942e-06
-## 14       A 0.9999235 5.722023e-05 1.050340e-05 3.124517e-06 5.693514e-06
-## 15       A 0.5555544 1.805552e-01 4.166658e-02 2.777989e-02 1.944440e-01
-## 16       A 0.7291643 1.666661e-01 0.000000e+00 3.254943e-06 1.041663e-01
-## 17       A 0.9993029 6.939568e-04 0.000000e+00 3.122578e-06 0.000000e+00
-## 18       A 0.5510362 4.344789e-01 0.000000e+00 1.448489e-02 0.000000e+00
-## 19       A 0.5413260 4.586663e-01 0.000000e+00 2.728244e-06 4.971425e-06
+  |=================================================================| 100%</code></pre>
+<pre class="r"><code>print(pred_glm[1],n=20)</code></pre>
+<pre><code>##    predict
+## 1        A
+## 2        A
+## 3        A
+## 4        A
+## 5        A
+## 6        A
+## 7        D
+## 8        A
+## 9        A
+## 10       A
+## 11       A
+## 12       A
+## 13       E
+## 14       A
+## 15       E
+## 16       A
+## 17       A
+## 18       B
+## 19       A
+## 20       B
 ## 
-## [20 rows x 6 columns]</code></pre>
-<pre class="r"><code>print(h2o.predict(GBM, newdata = h2o_test), n = -1)</code></pre>
-<pre><code>## 
-  |                                                                       
-  |                                                                 |   0%
-  |                                                                       
-  |=================================================================| 100%
-##    predict         A            B            C            D            E
-## 1        A 0.9996315 9.213661e-05 9.212479e-05 9.213379e-05 9.211482e-05
-## 2        A 0.9996315 9.213720e-05 9.213586e-05 9.213401e-05 9.211542e-05
-## 3        A 0.9996315 9.213721e-05 9.213648e-05 9.213401e-05 9.211543e-05
-## 4        A 0.9996315 9.213658e-05 9.213583e-05 9.213343e-05 9.211490e-05
-## 5        A 0.9996315 9.213721e-05 9.213645e-05 9.213403e-05 9.211545e-05
-## 6        A 0.9996315 9.213717e-05 9.213649e-05 9.213402e-05 9.211554e-05
-## 7        A 0.9996315 9.213719e-05 9.213643e-05 9.213399e-05 9.211541e-05
-## 8        A 0.9996315 9.213729e-05 9.210695e-05 9.211423e-05 9.211544e-05
-## 9        A 0.9996315 9.213726e-05 9.213651e-05 9.213099e-05 9.211112e-05
-## 10       A 0.9996315 9.213657e-05 9.213502e-05 9.213323e-05 9.211490e-05
-## 11       A 0.9996315 9.213727e-05 9.213211e-05 9.212829e-05 9.211114e-05
-## 12       A 0.9996315 9.213721e-05 9.213646e-05 9.213401e-05 9.211543e-05
-## 13       A 0.9996315 9.213721e-05 9.213525e-05 9.213363e-05 9.211543e-05
-## 14       A 0.9996315 9.213718e-05 9.213642e-05 9.213398e-05 9.211539e-05
-## 15       A 0.9996315 9.213659e-05 9.212683e-05 9.213492e-05 9.211480e-05
-## 16       A 0.9996315 9.213658e-05 9.213528e-05 9.213343e-05 9.211485e-05
-## 17       A 0.9996315 9.213721e-05 9.213491e-05 9.212020e-05 9.211541e-05
-## 18       A 0.9996317 9.213662e-05 9.221595e-05 9.209772e-05 9.188669e-05
-## 19       A 0.9996315 9.213670e-05 9.213565e-05 9.213328e-05 9.211491e-05
+## [20 rows x 1 column]</code></pre>
+<pre class="r"><code>print(pred_drf[1],n=20)</code></pre>
+<pre><code>##    predict
+## 1        B
+## 2        A
+## 3        B
+## 4        A
+## 5        A
+## 6        E
+## 7        D
+## 8        B
+## 9        A
+## 10       A
+## 11       B
+## 12       C
+## 13       B
+## 14       A
+## 15       E
+## 16       E
+## 17       A
+## 18       B
+## 19       B
+## 20       B
 ## 
-## [20 rows x 6 columns]</code></pre>
+## [20 rows x 1 column]</code></pre>
+<pre class="r"><code>print(pred_gbm[1],n=20)</code></pre>
+<pre><code>##    predict
+## 1        B
+## 2        A
+## 3        B
+## 4        A
+## 5        A
+## 6        E
+## 7        D
+## 8        B
+## 9        A
+## 10       A
+## 11       B
+## 12       C
+## 13       B
+## 14       A
+## 15       E
+## 16       E
+## 17       A
+## 18       B
+## 19       B
+## 20       B
+## 
+## [20 rows x 1 column]</code></pre>
 </div>
 <div id="interpretation-of-results-and-explanation-of-choice" class="section level1">
 <h1>Interpretation of results and explanation of choice</h1>

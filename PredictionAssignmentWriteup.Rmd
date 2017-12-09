@@ -14,24 +14,19 @@ h2o.init()
 ```
 
 # Data Preprocessing
-Glancing at the raw data of the testing dataset, it readily becomes apparent that the testing data set contains a large number of columns with all NA values, which will not be used during the prediction.
+Glancing at the raw data of the testing dataset, it readily becomes apparent that the testing data set contains a large number of columns with many NA values, which will not be used during the prediction.
 Identifying and cleansing those columns in both the testing and traing data set is achieved as follows
 
 ```{r col_cleanse}
-my_training <- training[, colSums(!is.na(testing)) != 0]
-my_testing <- testing[, colSums(!is.na(testing)) != 0]
+mostNA <- sapply(training, function(x) mean(is.na(x))) > 0.90
+my_training <- training[, mostNA == FALSE]
+my_testing <- testing[, mostNA == FALSE]
 ```
 
-Looking at the remaining subset of training data, there are still several rows with all NA values, which we'll remove
-```{r row_cleanse}
-my_training <- my_training[rowSums(is.na(my_training)) == 0, ]
-```
-
-Finally, we identify columns we consider not to have predictive value and remove them as follows
+Since row 1 is just an ID, we can eliminate it as well
 ```{r final_cleanse}
-no_predictive_value = c('cvtd_timestamp', 'raw_timestamp_part_1', 'raw_timestamp_part_2', 'new_window', 'num_window', 'user_name')
-my_training <- my_training[, !(names(my_training) %in% no_predictive_value)]
-my_testing <- my_testing[, !(names(my_testing) %in% no_predictive_value)]
+my_training <- my_training[,-1]
+my_testing <- my_testing[,-1]
 ```
 
 # Model building
@@ -47,9 +42,10 @@ K-fold cross validation (with K = 5) has been used for all models (this is the n
 
 ```{r models, , results = FALSE}
 h2o_train <- as.h2o(my_training)
-GLM <- h2o.glm(x = colnames(my_training)[1:53], y = "classe", training_frame = h2o_train, family = "multinomial", nfolds = 5)
-DRF <- h2o.randomForest(x = colnames(my_training)[1:53], y = "classe", training_frame = h2o_train, ntrees = 50, nfolds = 5)
-GBM <- h2o.gbm(x = colnames(my_training)[1:53], y = "classe", training_frame = h2o_train, nfolds = 5)
+h2o_test <- as.h2o(my_testing)
+GLM <- h2o.glm(x = colnames(my_training)[1:57], y = "classe", training_frame = h2o_train, family = "multinomial", nfolds = 5)
+DRF <- h2o.randomForest(x = colnames(my_training)[1:57], y = "classe", training_frame = h2o_train, ntrees = 100, nfolds = 5)
+GBM <- h2o.gbm(x = colnames(my_training)[1:57], y = "classe", training_frame = h2o_train, nfolds = 5)
 ```
 
 # Model performance
@@ -61,12 +57,15 @@ h2o.confusionMatrix(GBM)
 ```
 
 # Prediction
-All models agree in that they predict classe A for all of the twenty examples in the test set:
+All models agree in their predictions for all of the twenty examples in the test set:
 ```{r prediction}
-h2o_test <- as.h2o(my_testing)
-print(h2o.predict(GLM, newdata = h2o_test), n = -1)
-print(h2o.predict(DRF, newdata = h2o_test), n = -1)
-print(h2o.predict(GBM, newdata = h2o_test), n = -1)
+pred_glm <- h2o.predict(GLM, newdata = h2o_test)
+pred_drf <- h2o.predict(DRF, newdata = h2o_test)
+pred_gbm <- h2o.predict(GBM, newdata = h2o_test)
+
+print(pred_glm[1],n=20)
+print(pred_drf[1],n=20)
+print(pred_gbm[1],n=20)
 ```
 
 # Interpretation of results and explanation of choice
