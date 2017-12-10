@@ -8,6 +8,7 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(h2o)
+library(caret)
 training <- read.csv("~/Desktop/tmp/pml-training.csv")
 testing <- read.csv("~/Desktop/tmp/pml-testing.csv")
 h2o.init()
@@ -48,12 +49,26 @@ DRF <- h2o.randomForest(x = colnames(my_training)[1:57], y = "classe", training_
 GBM <- h2o.gbm(x = colnames(my_training)[1:57], y = "classe", training_frame = h2o_train, nfolds = 5)
 ```
 
-# Model performance
+# Model performance and out of sample evaluation
 Looking at the confusion matrices, we see that the performance of GLM is worst and that DRF and GBM score (almost) perfectly:
 ```{r confusionMatrices}
 h2o.confusionMatrix(GLM)
 h2o.confusionMatrix(DRF)
 h2o.confusionMatrix(GBM)
+```
+
+Since K-fold cross validation is performed on the fly with h2o, we now split our training data into training and validation set, for estimating out of sample error:
+```{r oos_setup}
+inTrain <- createDataPartition(y=my_training$classe, p = 0.9, list = FALSE)
+my_validattion <- my_training[-inTrain,]
+h2o_valid <- as.h2o(my_validattion)
+```
+
+again, we see that estimated oos error is higest for GLM and lowest for GBM:
+```{r oos}
+h2o.performance(GLM, h2o_valid)
+h2o.performance(DRF, h2o_valid)
+h2o.performance(GBM, h2o_valid)
 ```
 
 # Prediction

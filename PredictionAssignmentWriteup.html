@@ -149,8 +149,8 @@ GLM &lt;- h2o.glm(x = colnames(my_training)[1:57], y = &quot;classe&quot;, train
 DRF &lt;- h2o.randomForest(x = colnames(my_training)[1:57], y = &quot;classe&quot;, training_frame = h2o_train, ntrees = 100, nfolds = 5)
 GBM &lt;- h2o.gbm(x = colnames(my_training)[1:57], y = &quot;classe&quot;, training_frame = h2o_train, nfolds = 5)</code></pre>
 </div>
-<div id="model-performance" class="section level1">
-<h1>Model performance</h1>
+<div id="model-performance-and-out-of-sample-evaluation" class="section level1">
+<h1>Model performance and out of sample evaluation</h1>
 <p>Looking at the confusion matrices, we see that the performance of GLM is worst and that DRF and GBM score (almost) perfectly:</p>
 <pre class="r"><code>h2o.confusionMatrix(GLM)</code></pre>
 <pre><code>## Confusion Matrix: Row labels: Actual class; Column labels: Predicted class
@@ -164,12 +164,12 @@ GBM &lt;- h2o.gbm(x = colnames(my_training)[1:57], y = &quot;classe&quot;, train
 <pre class="r"><code>h2o.confusionMatrix(DRF)</code></pre>
 <pre><code>## Confusion Matrix: Row labels: Actual class; Column labels: Predicted class
 ##           A    B    C    D    E  Error          Rate
-## A      5577    3    0    0    0 0.0005 =   3 / 5,580
-## B        10 3786    1    0    0 0.0029 =  11 / 3,797
-## C         0   24 3385   13    0 0.0108 =  37 / 3,422
-## D         0    0   20 3191    5 0.0078 =  25 / 3,216
-## E         0    0    0    5 3602 0.0014 =   5 / 3,607
-## Totals 5587 3813 3406 3209 3607 0.0041 = 81 / 19,622</code></pre>
+## A      5578    2    0    0    0 0.0004 =   2 / 5,580
+## B         9 3787    1    0    0 0.0026 =  10 / 3,797
+## C         0   21 3390   11    0 0.0094 =  32 / 3,422
+## D         0    0   22 3190    4 0.0081 =  26 / 3,216
+## E         0    0    0    7 3600 0.0019 =   7 / 3,607
+## Totals 5587 3810 3413 3208 3604 0.0039 = 77 / 19,622</code></pre>
 <pre class="r"><code>h2o.confusionMatrix(GBM)</code></pre>
 <pre><code>## Confusion Matrix: Row labels: Actual class; Column labels: Predicted class
 ##           A    B    C    D    E  Error          Rate
@@ -179,6 +179,110 @@ GBM &lt;- h2o.gbm(x = colnames(my_training)[1:57], y = &quot;classe&quot;, train
 ## D         0    0   12 3201    3 0.0047 =  15 / 3,216
 ## E         0    0    0    6 3601 0.0017 =   6 / 3,607
 ## Totals 5581 3801 3415 3221 3604 0.0022 = 43 / 19,622</code></pre>
+<p>Since K-fold cross validation is performed on the fly with h2o, we now split our training data into training and validation set, for estimating out of sample error:</p>
+<pre class="r"><code>inTrain &lt;- createDataPartition(y=my_training$classe, p = 0.9, list = FALSE)
+my_validattion &lt;- my_training[-inTrain,]
+h2o_valid &lt;- as.h2o(my_validattion)</code></pre>
+<pre><code>## 
+  |                                                                       
+  |                                                                 |   0%
+  |                                                                       
+  |=================================================================| 100%</code></pre>
+<p>again, we see that estimated oos error is higest for GLM and lowest for GBM:</p>
+<pre class="r"><code>h2o.performance(GLM, h2o_valid)</code></pre>
+<pre><code>## H2OMultinomialMetrics: glm
+## 
+## Test Set Metrics: 
+## =====================
+## 
+## MSE: (Extract with `h2o.mse`) 0.499067
+## RMSE: (Extract with `h2o.rmse`) 0.7064468
+## Logloss: (Extract with `h2o.logloss`) 1.30726
+## Mean Per-Class Error: 0.5179818
+## Null Deviance: (Extract with `h2o.nulldeviance`) 6223.437
+## Residual Deviance: (Extract with `h2o.residual_deviance`) 5124.458
+## R^2: (Extract with `h2o.r2`) 0.7707503
+## AIC: (Extract with `h2o.aic`) NaN
+## Confusion Matrix: Extract with `h2o.confusionMatrix(&lt;model&gt;, &lt;data&gt;)`)
+## =========================================================================
+## Confusion Matrix: Row labels: Actual class; Column labels: Predicted class
+##          A   B   C   D   E  Error          Rate
+## A      425  50  25  49   9 0.2384 =   133 / 558
+## B      116 159  36  41  27 0.5805 =   220 / 379
+## C      120  35 117  56  14 0.6579 =   225 / 342
+## D       59  59  18 142  43 0.5576 =   179 / 321
+## E       72  44  37  47 160 0.5556 =   200 / 360
+## Totals 792 347 233 335 253 0.4883 = 957 / 1,960
+## 
+## Hit Ratio Table: Extract with `h2o.hit_ratio_table(&lt;model&gt;, &lt;data&gt;)`
+## =======================================================================
+## Top-5 Hit Ratios: 
+##   k hit_ratio
+## 1 1  0.511735
+## 2 2  0.719388
+## 3 3  0.841837
+## 4 4  0.931633
+## 5 5  1.000000</code></pre>
+<pre class="r"><code>h2o.performance(DRF, h2o_valid)</code></pre>
+<pre><code>## H2OMultinomialMetrics: drf
+## 
+## Test Set Metrics: 
+## =====================
+## 
+## MSE: (Extract with `h2o.mse`) 0.003947293
+## RMSE: (Extract with `h2o.rmse`) 0.06282749
+## Logloss: (Extract with `h2o.logloss`) 0.04191286
+## Mean Per-Class Error: 0
+## Confusion Matrix: Extract with `h2o.confusionMatrix(&lt;model&gt;, &lt;data&gt;)`)
+## =========================================================================
+## Confusion Matrix: Row labels: Actual class; Column labels: Predicted class
+##          A   B   C   D   E  Error        Rate
+## A      558   0   0   0   0 0.0000 =   0 / 558
+## B        0 379   0   0   0 0.0000 =   0 / 379
+## C        0   0 342   0   0 0.0000 =   0 / 342
+## D        0   0   0 321   0 0.0000 =   0 / 321
+## E        0   0   0   0 360 0.0000 =   0 / 360
+## Totals 558 379 342 321 360 0.0000 = 0 / 1,960
+## 
+## Hit Ratio Table: Extract with `h2o.hit_ratio_table(&lt;model&gt;, &lt;data&gt;)`
+## =======================================================================
+## Top-5 Hit Ratios: 
+##   k hit_ratio
+## 1 1  1.000000
+## 2 2  1.000000
+## 3 3  1.000000
+## 4 4  1.000000
+## 5 5  1.000000</code></pre>
+<pre class="r"><code>h2o.performance(GBM, h2o_valid)</code></pre>
+<pre><code>## H2OMultinomialMetrics: gbm
+## 
+## Test Set Metrics: 
+## =====================
+## 
+## MSE: (Extract with `h2o.mse`) 0.004726202
+## RMSE: (Extract with `h2o.rmse`) 0.06874738
+## Logloss: (Extract with `h2o.logloss`) 0.03913296
+## Mean Per-Class Error: 0.00300951
+## Confusion Matrix: Extract with `h2o.confusionMatrix(&lt;model&gt;, &lt;data&gt;)`)
+## =========================================================================
+## Confusion Matrix: Row labels: Actual class; Column labels: Predicted class
+##          A   B   C   D   E  Error        Rate
+## A      558   0   0   0   0 0.0000 =   0 / 558
+## B        0 379   0   0   0 0.0000 =   0 / 379
+## C        0   0 341   1   0 0.0029 =   1 / 342
+## D        0   0   2 318   1 0.0093 =   3 / 321
+## E        0   0   0   1 359 0.0028 =   1 / 360
+## Totals 558 379 343 320 360 0.0026 = 5 / 1,960
+## 
+## Hit Ratio Table: Extract with `h2o.hit_ratio_table(&lt;model&gt;, &lt;data&gt;)`
+## =======================================================================
+## Top-5 Hit Ratios: 
+##   k hit_ratio
+## 1 1  0.997449
+## 2 2  1.000000
+## 3 3  1.000000
+## 4 4  1.000000
+## 5 5  1.000000</code></pre>
 </div>
 <div id="prediction" class="section level1">
 <h1>Prediction</h1>
